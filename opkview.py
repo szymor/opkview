@@ -18,6 +18,7 @@ window.show_all()
 textview = builder.get_object("textview1")
 textbuffer = textview.get_buffer()
 image = builder.get_object("image1")
+aboutdialog = builder.get_object('aboutdialog1')
 
 # initialization
 textbuffer.set_text("to be loaded")
@@ -25,6 +26,8 @@ textbuffer.set_text("to be loaded")
 def load_opk(path):
     filename = path
     opk = SquashFsImage(path)
+    image.clear()
+    platformset = set()
     platforms = ""
     appname = ""
     comment = ""
@@ -34,22 +37,26 @@ def load_opk(path):
         iname = i.getName().decode("utf-8")
         m = re.match(r"(?:[^.]*\.)?([a-zA-Z0-9]+)\.desktop", iname)
         if m is not None:
-            if platforms != "":
-                platforms += ", "
-            else:
+            if len(platformset) == 0:
                 # parse .desktop file once
                 desktopfile = configparser.ConfigParser(allow_no_value=True, strict=False)
                 desktopfile.read_string(i.getContent().decode("utf-8"))
                 appname = desktopfile["Desktop Entry"].get("Name", "")
                 comment = desktopfile["Desktop Entry"].get("Comment", "")
                 manualpath = desktopfile["Desktop Entry"].get("X-OD-Manual", "")
-            platforms += m.group(1)
+            platformset.add(m.group(1))
         m = re.match(r".+\.png", iname)
         if m is not None:
             loader = GdkPixbuf.PixbufLoader()
             loader.write(i.getContent())
             loader.close()
             image.set_from_pixbuf(loader.get_pixbuf())
+    # convert platform set to string
+    for p in platformset:
+        if platforms == "":
+            platforms += p
+        else:
+            platforms += ", " + p
     for i in opk.root.children:
         iname = i.getName().decode("utf-8")
         if iname == manualpath:
@@ -78,8 +85,22 @@ class Handler:
     def onDestroy(self, *args):
         Gtk.main_quit()
 
-    def onOpen(self, button):
-        print("Hello World!")
+    def onOpen(self, *args):
+        dialog = Gtk.FileChooserDialog("Please choose a file", window,
+            Gtk.FileChooserAction.OPEN,
+            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            filepath = dialog.get_filename()
+            load_opk(filepath)
+        dialog.destroy()
+
+    def onAbout(self, *args):
+        aboutdialog.show()
+
+    def onAboutDialogClose(self, *args):
+        aboutdialog.hide()
 
 builder.connect_signals(Handler())
 
