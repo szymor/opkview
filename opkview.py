@@ -3,9 +3,11 @@
 import configparser
 import re
 import sys
+import tempfile
+import magic
 from PySquashfsImage import SquashFsImage
 import gi
-gi.require_version("Gtk", "2.0")
+gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GdkPixbuf
 
 builder = Gtk.Builder()
@@ -13,8 +15,6 @@ builder.add_from_file("layout.glade")
 window = builder.get_object("window1")
 window.set_title("Tiny OPK Viewer")
 window.show_all()
-#statusbar = builder.get_object("statusbar2")
-#statusbar.push(0, "takie tam")
 textview = builder.get_object("textview1")
 textbuffer = textview.get_buffer()
 image = builder.get_object("image1")
@@ -28,8 +28,12 @@ def load_opk(path):
     opk = SquashFsImage(path)
     image.clear()
     platformset = set()
+    desktopno = 0
     platforms = ""
     appname = ""
+    executable = ""
+    execid = ""
+    version = ""
     comment = ""
     manual = ""
     manualpath = ""
@@ -37,11 +41,14 @@ def load_opk(path):
         iname = i.getName().decode("utf-8")
         m = re.match(r"(?:[^.]*\.)?([a-zA-Z0-9]+)\.desktop", iname)
         if m is not None:
+            desktopno = desktopno + 1
             if len(platformset) == 0:
                 # parse .desktop file once
                 desktopfile = configparser.ConfigParser(allow_no_value=True, strict=False)
                 desktopfile.read_string(i.getContent().decode("utf-8"))
                 appname = desktopfile["Desktop Entry"].get("Name", "")
+                executable = desktopfile["Desktop Entry"].get("Exec", "<none>")
+                version = desktopfile["Desktop Entry"].get("Version", "")
                 comment = desktopfile["Desktop Entry"].get("Comment", "")
                 manualpath = desktopfile["Desktop Entry"].get("X-OD-Manual", "")
             platformset.add(m.group(1))
@@ -67,14 +74,24 @@ def load_opk(path):
                     break
                 except:
                     manual = "<reading error>"
+        if iname == executable:
+            # workaround for libmagic from_file vs from_buffer bug for elves
+            with tempfile.NamedTemporaryFile() as f:
+                f.write(i.getContent())
+                execid = magic.from_file(f.name)
     opk.close()
     if appname == "":
         appname = "none"
     if platforms == "":
         platforms = "none"
-    content = "Filename: " + filename + "\n"
+    content = "OPK filename: " + filename + "\n"
+    content += "Number of desktop files: " + str(desktopno) + "\n"
+    content += "Platforms: " + platforms + "\n\n"
     content += "Appname: " + appname + "\n"
-    content += "Platforms: " + platforms + "\n"
+    content += "Executable: " + executable + "\n"
+    content += "Exec identity: " + execid + "\n"
+    if version != "":
+        content += "Version: " + version + "\n"
     if comment != "":
         content += "Comment: " + comment + "\n"
     if manual != "":
