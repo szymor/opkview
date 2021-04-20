@@ -562,19 +562,17 @@ DAMAGES.
           <object class="GtkHPaned" id="hpaned1">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
-            <property name="wide-handle">True</property>
             <child>
               <object class="GtkScrolledWindow" id="scrolledwindow1">
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
-                <property name="hscrollbar-policy">never</property>
                 <property name="overlay-scrolling">False</property>
                 <child>
                   <object class="GtkTextView" id="textview1">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="editable">False</property>
-                    <property name="wrap-mode">word-char</property>
+                    <property name="wrap-mode">word</property>
                     <property name="cursor-visible">False</property>
                     <property name="monospace">True</property>
                   </object>
@@ -592,7 +590,7 @@ DAMAGES.
                 <property name="stock">gtk-missing-image</property>
               </object>
               <packing>
-                <property name="resize">True</property>
+                <property name="resize">False</property>
                 <property name="shrink">True</property>
               </packing>
             </child>
