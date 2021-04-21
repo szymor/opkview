@@ -6,6 +6,8 @@ import sys
 import tempfile
 import os
 import magic
+import io
+from elftools.elf.elffile import ELFFile
 from PySquashfsImage import SquashFsImage
 import gi
 gi.require_version("Gtk", "3.0")
@@ -43,20 +45,16 @@ def load_opk(path):
             desktopfile.read_string(i.getContent().decode("utf-8"))
             dset = dict()
             dset['appname'] = desktopfile["Desktop Entry"].get("Name", "", raw=True)
-            dset['executable'] = os.path.basename(desktopfile["Desktop Entry"].get("Exec", "<none>", raw=True).split()[0])
-            if dset['executable'] in execs:
-                execs[dset['executable']].add(iname)
+            dset['executable'] = os.path.basename(desktopfile["Desktop Entry"].get("Exec", "", raw=True).split()[0])
+            if dset['executable'] != "":
+                execs[dset['executable']] = dict()
             else:
-                execs[dset['executable']] = {iname}
-            dset['execid'] = ""
+                dset['executable'] = "<none>"
             dset['version'] = desktopfile["Desktop Entry"].get("Version", "", raw=True)
             dset['comment'] = desktopfile["Desktop Entry"].get("Comment", "", raw=True)
             dset['manualpath'] = desktopfile["Desktop Entry"].get("X-OD-Manual", "", raw=True)
-            if dset['manualpath'] in manuals:
-                manuals[dset['manualpath']].add(iname)
-            else:
-                manuals[dset['manualpath']] = {iname}
-            dset['manual'] = ""
+            if dset['manualpath'] != "":
+                manuals[dset['manualpath']] = ""
             desktops[iname] = dset
             platformset.add(m.group(1))
         m = re.match(r".+\.png", iname)
@@ -78,20 +76,24 @@ def load_opk(path):
             man = ""
             for e in encodings:
                 try:
-                    man = i.getContent().decode(e)
+                    manuals[iname] = i.getContent().decode(e)
                     break
                 except:
-                    man = "<reading error>"
-            for m in manuals[iname]:
-                desktops[m]['manual'] = man
+                    manuals[iname] = "<reading error>"
         if iname in execs:
-            ei = magic.from_buffer(i.getContent())
-            for e in execs[iname]:
-                desktops[e]['execid'] = ei
-            # workaround for libmagic from_file vs from_buffer bug for elves
-            #with tempfile.NamedTemporaryFile() as f:
-            #    f.write(i.getContent())
-            #    execid = magic.from_file(f.name)
+            execs[iname]['magic'] = magic.from_buffer(i.getContent())
+            execs[iname]['mime'] = magic.from_buffer(i.getContent(), mime=True)
+            execs[iname]['iself'] = execs[iname]['mime'] == 'application/x-executable' or execs[iname]['mime'] == 'application/x-pie-executable'
+            if execs[iname]['iself']:
+                bstream = io.BytesIO(i.getContent())
+                elf = ELFFile(bstream)
+                dynsec = elf.get_section_by_name(".dynamic")
+                execs[iname]['dynamic'] = dynsec is not None
+                if execs[iname]['dynamic']:
+                    execs[iname]['deps'] = []
+                    for tag in dynsec.iter_tags():
+                        if tag.entry.d_tag == "DT_NEEDED":
+                            execs[iname]['deps'].append(tag.needed)
     opk.close()
     if platforms == "":
         platforms = "none"
@@ -104,14 +106,37 @@ def load_opk(path):
             desktops[key]['appname'] = "none"
         content += "Appname: " + desktops[key]['appname'] + "\n"
         content += "Executable: " + desktops[key]['executable'] + "\n"
-        content += "Exec identity: " + desktops[key]['execid'] + "\n"
         if desktops[key]['version'] != "":
             content += "Version: " + desktops[key]['version'] + "\n"
         if desktops[key]['comment'] != "":
             content += "Comment: " + desktops[key]['comment'] + "\n"
-        if desktops[key]['manual'] != "":
-            content += "Manual:\n" + desktops[key]['manual'] + "\n"
+        if desktops[key]['manualpath'] != "":
+            content += "Manual: " + desktops[key]['manualpath'] + "\n"
         content += "\n"
+    for key in execs:
+        content += "Executable " + key + "\n"
+        content += "Identity: " + execs[key]['magic'] + "\n"
+        if execs[key]['iself']:
+            if execs[key]['dynamic']:
+                content += "The executable is dynamically linked.\n"
+                if len(execs[key]['deps']) == 0:
+                    content += "No dynamic dependencies detected.\n"
+                else:
+                    content += "Dynamic dependencies:\n"
+                    for d in execs[key]['deps']:
+                        content += "    " + d + "\n"
+            else:
+                content += "The executable is statically linked.\n"
+        content += "\n"
+    for key in manuals:
+        if manuals[key] == "":
+            content += "Manual " + key + " is empty or nonexistent.\n"
+        else:
+            content += "Manual " + key + "\n"
+            content += "=== MANUAL START ===\n"
+            content += manuals[key] + "\n"
+            content += "=== MANUAL END ===\n"
+            content += "\n"
     textbuffer.set_text(content)
 
 class Handler:
@@ -128,6 +153,9 @@ class Handler:
             filepath = dialog.get_filename()
             load_opk(filepath)
         dialog.destroy()
+
+    def onExtract(self, *args):
+        print("Extract clicked")
 
     def onAbout(self, *args):
         aboutdialog.show()
