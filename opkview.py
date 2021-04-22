@@ -23,10 +23,34 @@ textbuffer = textview.get_buffer()
 image = builder.get_object("image1")
 aboutdialog = builder.get_object('aboutdialog1')
 
+def reset_view(msg):
+    global opk_path
+    opk_path = ""
+    textbuffer.set_text(msg)
+
 # initialization
-textbuffer.set_text("to be loaded")
+reset_view("Load an OPK file to see its description.")
+
+def extract_node(node, destpath):
+    if node.isFolder():
+        if node.getName() == "":
+            dirpath = destpath
+        else:
+            dirpath = destpath + "/" + node.getName().decode("utf-8")
+            os.mkdir(dirpath)
+        for c in node.children:
+            extract_node(c, dirpath)
+    else:
+        with open(destpath + "/" + node.getName().decode("utf-8"), "wb") as f:
+            f.write(node.getContent())
+
+def extract_opk(path, dest):
+    opk = SquashFsImage(path)
+    extract_node(opk.getRoot(), dest)
 
 def load_opk(path):
+    global opk_path
+    opk_path = path
     filename = path
     opk = SquashFsImage(path)
     image.clear()
@@ -144,18 +168,30 @@ class Handler:
         Gtk.main_quit()
 
     def onOpen(self, *args):
-        dialog = Gtk.FileChooserDialog("Please choose a file", window,
+        dialog = Gtk.FileChooserDialog("Select an OPK file", window,
             Gtk.FileChooserAction.OPEN,
             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
             Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
             filepath = dialog.get_filename()
-            load_opk(filepath)
+            try:
+                load_opk(filepath)
+            except:
+                reset_view("OPK loading failed.")
         dialog.destroy()
 
     def onExtract(self, *args):
-        print("Extract clicked")
+        dialog = Gtk.FileChooserDialog("Select a destination folder", window,
+            Gtk.FileChooserAction.SELECT_FOLDER,
+            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_SAVE, Gtk.ResponseType.OK))
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            filepath = dialog.get_filename()
+            if opk_path != "":
+                extract_opk(opk_path, filepath)
+        dialog.destroy()
 
     def onAbout(self, *args):
         aboutdialog.show()

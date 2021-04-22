@@ -7,4 +7,3 @@ A simple tool for viewing OpenDingux and RetroFW packages. It supports opening O
 - image viewer navigation in case of multiple images in the root directory
 - windows port
 - maybe C++ port
-- extract OPK
