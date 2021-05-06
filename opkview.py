@@ -62,7 +62,7 @@ def load_opk(path):
     execs = dict()
     for i in opk.root.children:
         iname = i.getName().decode("utf-8")
-        m = re.match(r"(?:[^.]*\.)?([a-zA-Z0-9]+)\.desktop", iname)
+        m = re.match(r"(?:[^.]*\.)?([^.]+)\.desktop", iname)
         if m is not None:
             desktopno = desktopno + 1
             desktopfile = configparser.ConfigParser(allow_no_value=True, strict=False)
